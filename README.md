@@ -10,6 +10,7 @@
 
 <p align="center"> 🤖 Подберет для тебя авто с drom.ru.
     <br> 
+    <a href="https://t.me/AvtosParser_Bot">https://t.me/AvtosParser_Bot</a>
 </p>
 
 ## 📝 Table of Contents
@@ -18,7 +19,6 @@
   - [Installing](#installing)
   - [Setting project ](#setting-project-)
 - [🤘 Usage ](#-usage-)
-  - [URL to Bot: https://t.me/AvtosParser\_Bot](#url-to-bot-httpstmeavtosparser_bot)
   - [Example ](#example-)
 
 ## 🏁 Getting Started <a name = "getting_started"></a>
@@ -43,8 +43,6 @@ node ./server.js
 </ol>
 
 ## 🤘 Usage <a name = "usage"></a>
-
-### URL to Bot: https://t.me/AvtosParser_Bot
 
 ### Example <a name = "example"></a>
 <ol>
