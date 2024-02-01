@@ -38,10 +38,10 @@ URL to Bot: https://t.me/AvtosParser_Bot
 </li>
 <li>
   <strong>Enter Token Telegram Bot:</strong><br/>
-  <code>
-    const token = "Enter your TokenBotApi";
-  </code>
 </li>
+  <code>
+const token = "Enter your TokenBotApi";
+  </code>
 </ol>
 
 ## 🤘 Usage <a name = "usage"></a>
