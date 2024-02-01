@@ -38,9 +38,7 @@ URL to Bot: https://t.me/AvtosParser_Bot
 </li>
 <li>
   <strong>Enter Token Telegram Bot:
-  <code>
-    const token = "Enter your TokenBotApi";
-  </code>
+  <code>const token = "Enter your TokenBotApi";</code>
   </strong>
 </li>
 </ol>
