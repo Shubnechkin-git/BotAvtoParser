@@ -18,6 +18,7 @@
   - [Installing](#installing)
   - [Setting project ](#setting-project-)
 - [🤘 Usage ](#-usage-)
+  - [URL to Bot: https://t.me/AvtosParser\_Bot](#url-to-bot-httpstmeavtosparser_bot)
   - [Example ](#example-)
 
 ## 🏁 Getting Started <a name = "getting_started"></a>
@@ -28,8 +29,6 @@ npm install
 cd ./BotAvtoParser
 node ./server.js
 ```
-
-URL to Bot: https://t.me/AvtosParser_Bot
 
 ### Setting project <a name = "serring-project"></a>
 <ol>
@@ -44,6 +43,9 @@ URL to Bot: https://t.me/AvtosParser_Bot
 </ol>
 
 ## 🤘 Usage <a name = "usage"></a>
+
+### URL to Bot: https://t.me/AvtosParser_Bot
+
 ### Example <a name = "example"></a>
 <ol>
   <li>
