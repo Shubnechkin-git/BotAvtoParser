@@ -37,8 +37,8 @@ URL to Bot: https://t.me/AvtosParser_Bot
   <strong>Get Token Telegram Bot: <a href="https://t.me/BotFather">https://t.me/BotFather</a></strong>
 </li>
 <li>
+  <strong>Enter Token Telegram Bot:</strong><br/>
   <code>
-//Enter Token Telegram Bot:<br/>
     const token = "Enter your TokenBotApi";
   </code>
 </li>
