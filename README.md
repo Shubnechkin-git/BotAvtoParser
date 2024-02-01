@@ -17,6 +17,7 @@
 - [🏁 Getting Started ](#-getting-started-)
   - [Installing](#installing)
 - [🤘 Usage ](#-usage-)
+  - [Example ](#example-)
 
 ## 🏁 Getting Started <a name = "getting_started"></a>
 ### Installing
@@ -30,6 +31,7 @@ node ./server.js
 URL to Bot: https://t.me/AvtosParser_Bot
 
 ## 🤘 Usage <a name = "usage">
+### Example <a name = "example">
 <ol>
   <li>
     Send command /start to bot
