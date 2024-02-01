@@ -16,6 +16,7 @@
 - [📝 Table of Contents](#-table-of-contents)
 - [🏁 Getting Started ](#-getting-started-)
   - [Installing](#installing)
+  - [Setting project ](#setting-project-)
 - [🤘 Usage ](#-usage-)
   - [Example ](#example-)
 
@@ -30,8 +31,21 @@ node ./server.js
 
 URL to Bot: https://t.me/AvtosParser_Bot
 
-## 🤘 Usage <a name = "usage">
-### Example <a name = "example">
+### Setting project <a name = "serring-project"></a>
+<ol>
+<li>
+  <strong>Get Token Telegram Bot: <a href="https://t.me/BotFather">https://t.me/BotFather</a></strong>
+</li>
+<li>
+  <strong>Enter Token Telegram Bot: </strong>
+  <code>
+    const token = "Enter your TokenBotApi";
+  </code>
+</li>
+</ol>
+
+## 🤘 Usage <a name = "usage"></a>
+### Example <a name = "example"></a>
 <ol>
   <li>
     Send command /start to bot
