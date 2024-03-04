@@ -25,8 +25,8 @@
 ### Installing
 ```
 git clone https://github.com/Shubnechkin-git/BotAvtoParser
-npm install
 cd ./BotAvtoParser
+npm i
 node ./server.js
 ```
 
