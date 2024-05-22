@@ -5,12 +5,21 @@ const express = require("express");
 
 const mysql = require("mysql2");
 
-const pool = mysql.createPool({
-  host: "localhost",
-  database: "bot_avtoparser",
-  user: "root",
-  password: "root",
-});
+let pool;
+
+process.env.NODE_ENV === "development"
+  ? (pool = mysql.createPool({
+      host: "localhost",
+      database: "bot_avtoparser",
+      user: "root",
+      password: "root",
+    }))
+  : (pool = mysql.createPool({
+      host: "localhost",
+      database: "bot_avtoparser",
+      user: "root",
+      password: "root",
+    }));
 
 const sendQuery = (query) => {
   return new Promise((resolve, reject) => {
