@@ -14,12 +14,9 @@ process.env.NODE_ENV === "development"
       user: "root",
       password: "root",
     }))
-  : (pool = mysql.createPool({
-      host: "localhost",
-      database: "bot_avtoparser",
-      user: "root",
-      password: "root",
-    }));
+  : (pool = mysql.createPool(
+      "mysql://uivv6enagi6pqks5:PUH24GzNbYZyumILSq3k@bf9agbvq0j7t8rcw82k8-mysql.services.clever-cloud.com:3306/bf9agbvq0j7t8rcw82k8"
+    ));
 
 const sendQuery = (query) => {
   return new Promise((resolve, reject) => {
