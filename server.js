@@ -71,21 +71,64 @@ const searchParams = {
 // Функция для отправки сообщения с клавиатурой выбора марки
 async function sendBrandSelection(chatId) {
   const keyboard = {
-    inline_keyboard: [
-      [{ text: "Toyota", callback_data: "brand_Toyota" }],
-      [{ text: "Kia", callback_data: "brand_Kia" }],
-      [{ text: "Выйти в меню", callback_data: "exit" }],
-      // Добавьте другие марки
-    ],
+    force_reply: true,
   };
-  await bot.sendMessage(chatId, "Выберите марку:", { reply_markup: keyboard });
+  await bot.sendMessage(chatId, "Введите название марки:", {
+    reply_markup: keyboard,
+  });
+}
+
+async function savedMenu(chatId, car) {
+  let keyboard;
+  console.log(car.length);
+  if (car.length > 1) {
+    keyboard = {
+      inline_keyboard: [
+        [
+          {
+            text: "Далее",
+            callback_data: JSON.stringify({ action: "next_save" }),
+          },
+          {
+            text: "Удалить",
+            callback_data: JSON.stringify({ action: "delete_save" }),
+          },
+        ],
+      ],
+    };
+  } else {
+    keyboard = {
+      inline_keyboard: [
+        [
+          {
+            text: "Удалить",
+            callback_data: JSON.stringify({ action: "delete_save", id: 123 }),
+          },
+        ],
+      ],
+    };
+  }
+
+  await bot.sendMessage(chatId, `Действие:`, {
+    reply_markup: keyboard,
+  });
 }
 
 async function sendMenu(chatId) {
   const keyboard = {
     inline_keyboard: [
-      [{ text: "Поиск объявлений", callback_data: "restart_search" }],
-      [{ text: "Сохраненные объявления", callback_data: "saved" }],
+      [
+        {
+          text: "Поиск объявлений",
+          callback_data: JSON.stringify({ action: "restart_search" }),
+        },
+      ],
+      [
+        {
+          text: "Сохраненные объявления",
+          callback_data: JSON.stringify({ action: "saved" }),
+        },
+      ],
       // Добавьте другие марки
     ],
   };
@@ -98,15 +141,11 @@ async function sendMenu(chatId) {
 async function sendModelSelection(chatId) {
   // В зависимости от выбранной марки можно отправить разные варианты моделей
   const keyboard = {
-    inline_keyboard: [
-      [{ text: "Camry", callback_data: "model_Camry" }],
-      [{ text: "Rio", callback_data: "model_Rio" }],
-      // Добавьте другие модели
-      [{ text: "Назад", callback_data: "back" }],
-      [{ text: "Выйти в меню", callback_data: "exit" }],
-    ],
+    force_reply: true,
   };
-  await bot.sendMessage(chatId, "Выберите модель:", { reply_markup: keyboard });
+  await bot.sendMessage(chatId, "Введите название модели:", {
+    reply_markup: keyboard,
+  });
 }
 
 // Функция для отправки сообщения с клавиатурой ввода года
@@ -137,9 +176,24 @@ async function sendSearchParams(chatId) {
 
   const keyboard = {
     inline_keyboard: [
-      [{ text: "Начать поиск", callback_data: "start_search" }],
-      [{ text: "Заполнить заново", callback_data: "restart_search" }],
-      [{ text: "Выйти в меню", callback_data: "exit" }],
+      [
+        {
+          text: "Начать поиск",
+          callback_data: JSON.stringify({ action: "start_search" }),
+        },
+      ],
+      [
+        {
+          text: "Заполнить заново",
+          callback_data: JSON.stringify({ action: "restart_search" }),
+        },
+      ],
+      [
+        {
+          text: "Выйти в меню",
+          callback_data: JSON.stringify({ action: "exit" }),
+        },
+      ],
     ],
   };
 
@@ -179,10 +233,25 @@ async function sendCurrentBulletinWithButtons(chatId) {
 
     const keyboard = {
       inline_keyboard: [
-        [{ text: "Далее", callback_data: "next" }],
-        [{ text: "Сохранить", callback_data: "save" }],
-        [{ text: "Начать заново", callback_data: "restart_search" }],
-        [{ text: "Выйти в меню", callback_data: "exit" }],
+        [{ text: "Далее", callback_data: JSON.stringify({ action: "next" }) }],
+        [
+          {
+            text: "Сохранить",
+            callback_data: JSON.stringify({ action: "save" }),
+          },
+        ],
+        [
+          {
+            text: "Начать заново",
+            callback_data: JSON.stringify({ action: "restart_search" }),
+          },
+        ],
+        [
+          {
+            text: "Выйти в меню",
+            callback_data: JSON.stringify({ action: "exit" }),
+          },
+        ],
       ],
     };
     await bot.sendMessage(chatId, "Выберите действие:", {
@@ -191,7 +260,12 @@ async function sendCurrentBulletinWithButtons(chatId) {
   } else {
     const keyboard = {
       inline_keyboard: [
-        [{ text: "Начать заново", callback_data: "restart_search" }],
+        [
+          {
+            text: "Начать заново",
+            callback_data: JSON.stringify({ action: "restart_search" }),
+          },
+        ],
       ],
     };
     await bot.sendMessage(chatId, "Больше объявлений нет.", {
@@ -204,40 +278,66 @@ async function sendCurrentBulletinWithButtons(chatId) {
 bot.on("callback_query", async (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const messageId = callbackQuery.message.message_id;
-  const parameter = callbackQuery.data;
 
-  if (parameter.startsWith("brand_")) {
-    // Обработка выбора марки
-    const brand = parameter.replace("brand_", "");
-    searchParams.brand = brand.toLowerCase();
-    await bot.editMessageText(`Выбрана марка: ${brand}`, {
+  let isReady = false;
+
+  const data = JSON.parse(callbackQuery.data);
+  const action = data.action && data.action;
+  const id = data.id && data.id;
+
+  if (action === "start_search") {
+    try {
+      const ads = await searchAds(
+        searchParams.brand,
+        searchParams.model,
+        searchParams.year,
+        chatId
+      );
+      // Отправляем найденные объявления пользователю
+      console.log(ads);
+      await bot.deleteMessage(chatId, messageId);
+      if (ads.length == 0) {
+        await bot.sendMessage(chatId, "По вашему запросу ничего не найдено.");
+        // Начать заполнение сначала
+        searchParams.brand = null;
+        searchParams.model = null;
+        searchParams.year = null;
+        await sendMenu(chatId);
+      }
+      // Дополнительной отправки объявления здесь нет
+    } catch (error) {
+      // Обработка ошибок при выполнении поиска
+      console.error(error);
+      await bot.sendMessage(chatId, "Произошла ошибка при выполнении поиска.");
+    }
+  } else if (action === "next_save") {
+    await bot.editMessageText("слуд", {
       chat_id: chatId,
       message_id: messageId,
     });
-    await sendModelSelection(chatId); // Отправляем клавиатуру для выбора модели
-  } else if (parameter.startsWith("model_")) {
-    // Обработка выбора модели
-    const model = parameter.replace("model_", "");
-    searchParams.model = model.toLowerCase();
-    await bot.editMessageText(`Выбрана модель: ${model}`, {
+  } else if (action === "delete_save") {
+    await bot.editMessageText("del", {
       chat_id: chatId,
       message_id: messageId,
     });
-    await sendYearInput(chatId); // Отправляем клавиатуру для ввода года
-  } else if (parameter === "back") {
-    // Обработка кнопки "Назад"
-    // Очистка параметров и отправка клавиатуры для выбора марки
+    console.log(id);
+  } else if (action === "restart_search") {
+    // Обработка кнопки "Начать заново"
     searchParams.brand = null;
     searchParams.model = null;
-    await bot.editMessageText("Выберите марку:", {
+    searchParams.year = null;
+    await bot.editMessageText("Начните выбор параметров заново:", {
       chat_id: chatId,
       message_id: messageId,
     });
     await sendBrandSelection(chatId);
-  } else if (parameter === "next") {
-    currentBulletinIndex++;
-    await sendCurrentBulletinWithButtons(chatId);
-  } else if (parameter === "save") {
+  } else if (action === "exit") {
+    await bot.editMessageText("Главное меню:", {
+      chat_id: chatId,
+      message_id: messageId,
+    });
+    await sendMenu(chatId);
+  } else if (action === "save") {
     try {
       const result = await sendQuery(
         `INSERT INTO saved_cars (telegram_id, car_url) VALUES ('${callbackQuery.from.id}','${bulletins[currentBulletinIndex]}')`
@@ -250,77 +350,44 @@ bot.on("callback_query", async (callbackQuery) => {
     }
     currentBulletinIndex++;
     await sendCurrentBulletinWithButtons(chatId);
-  } else if (parameter === "start_search") {
-    try {
-      const ads = await searchAds(
-        searchParams.brand,
-        searchParams.model,
-        searchParams.year,
-        chatId
-      );
-      // Отправляем найденные объявления пользователю
-      console.log(ads);
-      if (ads.length == 0) {
-        await bot.sendMessage(chatId, "По вашему запросу ничего не найдено.");
-        // Начать заполнение сначала
-        searchParams.brand = null;
-        searchParams.model = null;
-        searchParams.year = null;
-        await sendBrandSelection(chatId);
-      }
-      // Дополнительной отправки объявления здесь нет
-    } catch (error) {
-      // Обработка ошибок при выполнении поиска
-      console.error(error);
-      await bot.sendMessage(chatId, "Произошла ошибка при выполнении поиска.");
-    }
-  } else if (parameter === "restart_search") {
-    // Обработка кнопки "Начать заново"
-    searchParams.brand = null;
-    searchParams.model = null;
-    searchParams.year = null;
-    await bot.editMessageText("Начните выбор параметров заново:", {
-      chat_id: chatId,
-      message_id: messageId,
-    });
-    await sendBrandSelection(chatId);
-  } else if (parameter === "exit") {
-    await bot.editMessageText("Главное меню:", {
-      chat_id: chatId,
-      message_id: messageId,
-    });
-    await sendMenu(chatId);
-  } else if (parameter === "saved") {
+  } else if (action === "saved") {
     try {
       const result = await sendQuery(
         `SELECT car_url FROM saved_cars WHERE telegram_id = '${callbackQuery.from.id}'`
       );
       console.log(result.length);
+      await bot.deleteMessage(chatId, messageId);
+      await bot.sendMessage(chatId, `Сохраненные объявления:`);
       if (result.length > 0) {
-        await bot.sendMessage(chatId, `Сохраненные объявления`);
-        for (let [index, element] of result.entries()) {
-          await bot.sendMessage(
-            chatId,
-            `${index + 1}/${result.length} \n ${element.car_url}`
-          );
-        }
+        await bot.sendMessage(
+          chatId,
+          `1/${result.length} ${result[0].car_url}}`
+        );
+        isReady = false;
+        await savedMenu(chatId, result);
       } else {
         bot.sendMessage(chatId, `Пусто!`);
+        isReady = true;
       }
     } catch (error) {
       await bot.sendMessage(chatId, `${error}`);
       console.error(error);
     }
     // await bot.editMessageText('Главное меню:', { chat_id: chatId, message_id: messageId });
-    await bot.sendMessage(chatId, "Главное меню:");
-    await sendMenu(chatId);
+    if (isReady == true) {
+      await bot.sendMessage(chatId, "Главное меню:");
+      await sendMenu(chatId);
+    }
+  } else if (action === "next") {
+    currentBulletinIndex++;
+    await sendCurrentBulletinWithButtons(chatId);
   }
 });
 // Обработчик события на ответ от пользователя
-
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const messageText = msg.text;
+  const messageId = msg.message_id;
 
   try {
     const result = await sendQuery(
@@ -331,13 +398,41 @@ bot.on("message", async (msg) => {
   }
 
   if (messageText === "/start") {
-    await sendBrandSelection(chatId);
+    // await bot.deleteMessage(chatId, messageId);
+    await sendBrandSelection(chatId, 1);
+  } else if (
+    msg.reply_to_message &&
+    msg.reply_to_message.text === "Введите название марки:"
+  ) {
+    searchParams.brand = messageText.toLowerCase();
+    if (searchParams.brand == null) {
+      await sendBrandSelection(chatId);
+      return;
+    }
+    await bot.sendMessage(chatId, `Выбрана марка: ${searchParams.brand}`);
+    await sendModelSelection(chatId);
+  } else if (
+    msg.reply_to_message &&
+    msg.reply_to_message.text === "Введите название модели:"
+  ) {
+    searchParams.model = messageText.toLowerCase();
+    if (searchParams.model == null) {
+      await sendModelSelection(chatId);
+      return;
+    }
+    await bot.sendMessage(chatId, `Выбрана модель: ${searchParams.model}`);
+    await sendYearInput(chatId);
   } else if (
     msg.reply_to_message &&
     msg.reply_to_message.text === "Введите год выпуска:"
   ) {
     // Обработка ввода года
     searchParams.year = parseInt(messageText);
+    console.log(searchParams.year);
+    if (isNaN(searchParams.year)) {
+      await sendYearInput(chatId);
+      return;
+    }
     await bot.sendMessage(chatId, `Выбран год: ${searchParams.year}`);
     // Отправляем сообщение с выбранными параметрами и клавиатурой "Начать поиск" или "Редактировать"
     await sendSearchParams(chatId);
