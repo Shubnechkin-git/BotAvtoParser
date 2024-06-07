@@ -340,23 +340,31 @@ bot.on("callback_query", async (callbackQuery) => {
   const id = data.id && data.id;
 
   if (action === "enable") {
-    bot.deleteMessage(chatId, messageId);
-    status = true;
-    await subscriptions(chatId, status);
-    userCronJobs[chatId] = cron.schedule("*/5 * * * * *", () => {
-      sendNotification(chatId);
-    });
-    bot.sendMessage(
-      chatId,
-      "Уведомления включены. Вы будете получать уведомления каждые 5 секунд."
-    );
+    try {
+      bot.deleteMessage(chatId, messageId);
+      status = true;
+      await subscriptions(chatId, status);
+      userCronJobs[chatId] = cron.schedule("*/5 * * * * *", () => {
+        sendNotification(chatId);
+      });
+      bot.sendMessage(
+        chatId,
+        "Уведомления включены. Вы будете получать уведомления каждые 5 секунд."
+      );
+    } catch (error) {
+      bot.sendMessage(chatId, error.message);
+    }
   } else if (action === "disable") {
-    bot.deleteMessage(chatId, messageId);
-    status = false;
-    await subscriptions(chatId, status);
-    userCronJobs[chatId].stop();
-    delete userCronJobs[chatId]; 
-    bot.sendMessage(chatId, "Уведомления отключены.");
+    try {
+      bot.deleteMessage(chatId, messageId);
+      status = false;
+      await subscriptions(chatId, status);
+      userCronJobs[chatId].stop();
+      delete userCronJobs[chatId];
+      bot.sendMessage(chatId, "Уведомления отключены.");
+    } catch (error) {
+      bot.sendMessage(chatId, error.message);
+    }
   } else if (action === "start_search") {
     try {
       const ads = await searchAds(
