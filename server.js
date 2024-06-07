@@ -5,11 +5,9 @@ const express = require("express");
 
 const mysql = require("mysql2");
 
-let result = undefined;
+let result = {};
 
 let pool;
-
-let prevMessageId = undefined;
 
 process.env.NODE_ENV === "development"
   ? (pool = mysql.createPool({
@@ -101,6 +99,12 @@ async function savedMenu(chatId, car, id = 0) {
             }),
           },
         ],
+        [
+          {
+            text: "Выйти в меню",
+            callback_data: JSON.stringify({ action: "exit" }),
+          },
+        ],
       ],
     };
   } else {
@@ -143,12 +147,45 @@ async function sendMenu(chatId) {
           callback_data: JSON.stringify({ action: "saved" }),
         },
       ],
+      [
+        {
+          text: "Подписки",
+          callback_data: JSON.stringify({ action: "subscriptions" }),
+        },
+      ],
     ],
   };
   await bot.sendMessage(chatId, "Выберите дейсвие:", {
     reply_markup: keyboard,
   });
 }
+// TODO Добавить функционал подписки
+const subscriptions = async (chatId, status = false) => {
+  const keyboard = {
+    inline_keyboard: [
+      [
+        {
+          text: status ? "🚩Включить" : "Включить",
+          callback_data: JSON.stringify({ action: "enable" }),
+        },
+        {
+          text: !status ? "🚩Выключить" : "Выключить",
+          callback_data: JSON.stringify({ action: "disable" }),
+        },
+      ],
+      [
+        {
+          text: "Выйти в меню",
+          callback_data: JSON.stringify({ action: "exit" }),
+        },
+      ],
+    ],
+  };
+
+  await bot.sendMessage(chatId, "Меню подписок", {
+    reply_markup: keyboard,
+  });
+};
 
 // Функция для отправки сообщения с клавиатурой выбора модели
 async function sendModelSelection(chatId) {
@@ -216,7 +253,7 @@ async function sendSearchParams(chatId) {
 let currentBulletinIndex = 0;
 let bulletins = [];
 
-let adsIndex = 1;
+let adsIndex = {};
 
 async function searchAds(brand, model, year, chatId) {
   try {
@@ -289,6 +326,8 @@ async function sendCurrentBulletinWithButtons(chatId) {
   }
 }
 
+let status = false;
+let userCronJobs = {};
 // Обработчик события на выбор параметра из инлайн-клавиатуры
 bot.on("callback_query", async (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
@@ -300,7 +339,25 @@ bot.on("callback_query", async (callbackQuery) => {
   const action = data.action && data.action;
   const id = data.id && data.id;
 
-  if (action === "start_search") {
+  if (action === "enable") {
+    bot.deleteMessage(chatId, messageId);
+    status = true;
+    await subscriptions(chatId, status);
+    userCronJobs[chatId] = cron.schedule("*/5 * * * * *", () => {
+      sendNotification(chatId);
+    });
+    bot.sendMessage(
+      chatId,
+      "Уведомления включены. Вы будете получать уведомления каждые 5 секунд."
+    );
+  } else if (action === "disable") {
+    bot.deleteMessage(chatId, messageId);
+    status = false;
+    await subscriptions(chatId, status);
+    userCronJobs[chatId].stop();
+    delete userCronJobs[chatId]; 
+    bot.sendMessage(chatId, "Уведомления отключены.");
+  } else if (action === "start_search") {
     try {
       const ads = await searchAds(
         searchParams.brand,
@@ -329,25 +386,33 @@ bot.on("callback_query", async (callbackQuery) => {
   } else if (action === "next_save") {
     try {
       await bot.editMessageText(
-        `${adsIndex + 1}/${result.length} ${result[adsIndex].car_url}`,
+        `${adsIndex[chatId].index + 1}/${result[chatId].length} ${
+          result[chatId][adsIndex[chatId].index].car_url
+        }`,
         {
           chat_id: chatId,
           message_id: messageId,
         }
       );
-      adsIndex++;
-      if (adsIndex < result.length) {
-        await savedMenu(chatId, result, adsIndex - 1);
+
+      adsIndex[chatId] = { index: adsIndex[chatId].index + 1 };
+      if (adsIndex[chatId].index < result[chatId].length) {
+        await savedMenu(chatId, result[chatId], adsIndex[chatId].index - 1);
       } else {
-        await savedMenu(chatId, result[adsIndex - 1], adsIndex - 1);
-        adsIndex = 1;
+        await savedMenu(
+          chatId,
+          result[chatId][adsIndex[chatId].index - 1],
+          adsIndex[chatId].index - 1
+        );
+
+        adsIndex[chatId] = { index: 1 };
       }
     } catch (error) {
       console.log(error);
     }
   } else if (action === "delete_save") {
     try {
-      adsIndex = 1;
+      adsIndex[chatId] = { index: 1 };
       await bot.deleteMessage(chatId, messageId - 1, {
         chat_id: chatId,
         message_id: messageId,
@@ -384,7 +449,7 @@ bot.on("callback_query", async (callbackQuery) => {
   } else if (action === "save") {
     try {
       await bot.deleteMessage(chatId, messageId);
-      result = await sendQuery(
+      const result = await sendQuery(
         `INSERT INTO saved_cars (telegram_id, car_url) VALUES ('${callbackQuery.from.id}','${bulletins[currentBulletinIndex]}')`
       );
       bot.sendMessage(chatId, `Сохранение выполнено!`);
@@ -396,19 +461,20 @@ bot.on("callback_query", async (callbackQuery) => {
     await sendCurrentBulletinWithButtons(chatId);
   } else if (action === "saved") {
     try {
-      result = await sendQuery(
+      result[chatId] = await sendQuery(
         `SELECT car_url, id FROM saved_cars WHERE telegram_id = '${callbackQuery.from.id}'`
       );
+      await bot.deleteMessage(chatId, messageId - 1);
       await bot.deleteMessage(chatId, messageId);
       await bot.sendMessage(chatId, `Сохраненные объявления:`);
-      if (result.length > 0) {
+      if (result[chatId].length > 0) {
         await bot.sendMessage(
           chatId,
-          `1/${result.length} ${result[0].car_url}}`
+          `1/${result[chatId].length} ${result[chatId][0].car_url}}`
         );
         isReady = false;
-        if (result.length > 1) await savedMenu(chatId, result);
-        else await savedMenu(chatId, result[0]);
+        if (result[chatId].length > 1) await savedMenu(chatId, result[chatId]);
+        else await savedMenu(chatId, result[chatId][0]);
       } else {
         bot.sendMessage(chatId, `Пусто!`);
         isReady = true;
@@ -426,15 +492,30 @@ bot.on("callback_query", async (callbackQuery) => {
     await bot.deleteMessage(chatId, messageId);
     currentBulletinIndex++;
     await sendCurrentBulletinWithButtons(chatId);
+  } else if (action === "subscriptions") {
+    try {
+      bot.deleteMessage(chatId, messageId - 1);
+      bot.deleteMessage(chatId, messageId);
+      await subscriptions(chatId, status);
+    } catch (error) {
+      bot.sendMessage(chatId, error.message);
+    }
   }
 });
+
+const cron = require("node-cron");
+
+function sendNotification(chatId) {
+  bot.sendMessage(chatId, `Это ваше уведомление ${chatId}`);
+}
+
 // Обработчик события на ответ от пользователя
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const messageText = msg.text;
   const messageId = msg.message_id;
 
-  adsIndex = 1;
+  adsIndex[chatId] = { index: 1 };
 
   try {
     const result = await sendQuery(
@@ -451,40 +532,57 @@ bot.on("message", async (msg) => {
     msg.reply_to_message &&
     msg.reply_to_message.text === "Введите название марки:"
   ) {
-    searchParams.brand = messageText.toLowerCase();
-    if (searchParams.brand == null) {
+    try {
+      searchParams.brand = messageText.toLowerCase();
+      if (searchParams.brand == null) {
+        await sendBrandSelection(chatId);
+        return;
+      }
+      await bot.sendMessage(chatId, `Выбрана марка: ${searchParams.brand}`);
+      await sendModelSelection(chatId);
+    } catch (error) {
+      bot.sendMessage(chatId, "Модель может содержать только буквы");
       await sendBrandSelection(chatId);
-      return;
     }
-    await bot.sendMessage(chatId, `Выбрана марка: ${searchParams.brand}`);
-    await sendModelSelection(chatId);
   } else if (
     msg.reply_to_message &&
     msg.reply_to_message.text === "Введите название модели:"
   ) {
-    searchParams.model = messageText.toLowerCase();
-    if (searchParams.model == null) {
+    try {
+      searchParams.model = messageText.toLowerCase();
+      if (searchParams.model == null) {
+        await sendModelSelection(chatId);
+        return;
+      }
+      await bot.sendMessage(chatId, `Выбрана модель: ${searchParams.model}`);
+      await sendYearInput(chatId);
+    } catch (error) {
+      bot.sendMessage(chatId, "Модель может содержать только буквы");
       await sendModelSelection(chatId);
-      return;
     }
-    await bot.sendMessage(chatId, `Выбрана модель: ${searchParams.model}`);
-    await sendYearInput(chatId);
   } else if (
     msg.reply_to_message &&
     msg.reply_to_message.text === "Введите год выпуска:"
   ) {
     // Обработка ввода года
-    searchParams.year = parseInt(messageText);
-    console.log(searchParams.year);
-    if (isNaN(searchParams.year)) {
-      await sendYearInput(chatId);
-      return;
+    try {
+      searchParams.year = parseInt(messageText);
+      console.log(searchParams.year);
+      if (isNaN(searchParams.year)) {
+        await bot.sendMessage(chatId, "Год может содержать только числа");
+        await sendYearInput(chatId);
+        return;
+      }
+      await bot.sendMessage(chatId, `Выбран год: ${searchParams.year}`);
+      // Отправляем сообщение с выбранными параметрами и клавиатурой "Начать поиск" или "Редактировать"
+      await sendSearchParams(chatId);
+    } catch (error) {
+      bot.sendMessage(chatId, error.message);
     }
-    await bot.sendMessage(chatId, `Выбран год: ${searchParams.year}`);
-    // Отправляем сообщение с выбранными параметрами и клавиатурой "Начать поиск" или "Редактировать"
-    await sendSearchParams(chatId);
   } else {
     await handleRandomMessage(chatId);
     await sendMenu(chatId);
   }
 });
+
+// todo: удалить лишнее и сделать рефакторинг

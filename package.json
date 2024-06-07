@@ -2,19 +2,21 @@
   "dependencies": {
     "axios": "^1.6.5",
     "cheerio": "^1.0.0-rc.12",
+    "cron": "^3.1.7",
     "express": "^4.19.2",
     "iconv-lite": "^0.6.3",
     "mysql2": "^3.9.7",
+    "node-cron": "^3.0.3",
     "node-telegram-bot-api": "^0.64.0"
   },
   "scripts": {
-    "start": "node server.js", 
+    "start": "node server.js",
     "start:dev": "cross-env NODE_ENV=development nodemon server.js"
   },
   "name": "botavtoparser",
   "description": "<p align=\"center\">\r   <a href=\"\" rel=\"noopener\">\r  <img width=200px height=200px src=\"https://i.imgur.com/FxL5qM0.jpg\" alt=\"Bot logo\"></a>\r </p>",
   "version": "1.0.0",
   "main": "server.js",
-  "author": "", 
+  "author": "",
   "license": "ISC"
 }
