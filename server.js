@@ -5,7 +5,11 @@ const express = require("express");
 
 const mysql = require("mysql2");
 
+let result = undefined;
+
 let pool;
+
+let prevMessageId = undefined;
 
 process.env.NODE_ENV === "development"
   ? (pool = mysql.createPool({
@@ -14,9 +18,7 @@ process.env.NODE_ENV === "development"
       user: "root",
       password: "root",
     }))
-  : (pool = mysql.createPool(
-      "mysql://uivv6enagi6pqks5:PUH24GzNbYZyumILSq3k@bf9agbvq0j7t8rcw82k8-mysql.services.clever-cloud.com:3306/bf9agbvq0j7t8rcw82k8"
-    ));
+  : (pool = mysql.createPool(process.env.MYSQL_ADDON_URI));
 
 const sendQuery = (query) => {
   return new Promise((resolve, reject) => {
@@ -78,7 +80,7 @@ async function sendBrandSelection(chatId) {
   });
 }
 
-async function savedMenu(chatId, car) {
+async function savedMenu(chatId, car, id = 0) {
   let keyboard;
   console.log(car.length);
   if (car.length > 1) {
@@ -87,11 +89,16 @@ async function savedMenu(chatId, car) {
         [
           {
             text: "Далее",
-            callback_data: JSON.stringify({ action: "next_save" }),
+            callback_data: JSON.stringify({
+              action: "next_save",
+            }),
           },
           {
             text: "Удалить",
-            callback_data: JSON.stringify({ action: "delete_save" }),
+            callback_data: JSON.stringify({
+              action: "delete_save",
+              id: car[id].id,
+            }),
           },
         ],
       ],
@@ -101,8 +108,15 @@ async function savedMenu(chatId, car) {
       inline_keyboard: [
         [
           {
+            text: "Выйти в меню",
+            callback_data: JSON.stringify({ action: "exit" }),
+          },
+          {
             text: "Удалить",
-            callback_data: JSON.stringify({ action: "delete_save", id: 123 }),
+            callback_data: JSON.stringify({
+              action: "delete_save",
+              id: car.id,
+            }),
           },
         ],
       ],
@@ -129,7 +143,6 @@ async function sendMenu(chatId) {
           callback_data: JSON.stringify({ action: "saved" }),
         },
       ],
-      // Добавьте другие марки
     ],
   };
   await bot.sendMessage(chatId, "Выберите дейсвие:", {
@@ -202,6 +215,8 @@ async function sendSearchParams(chatId) {
 
 let currentBulletinIndex = 0;
 let bulletins = [];
+
+let adsIndex = 1;
 
 async function searchAds(brand, model, year, chatId) {
   try {
@@ -295,6 +310,7 @@ bot.on("callback_query", async (callbackQuery) => {
       );
       // Отправляем найденные объявления пользователю
       console.log(ads);
+
       await bot.deleteMessage(chatId, messageId);
       if (ads.length == 0) {
         await bot.sendMessage(chatId, "По вашему запросу ничего не найдено.");
@@ -311,16 +327,40 @@ bot.on("callback_query", async (callbackQuery) => {
       await bot.sendMessage(chatId, "Произошла ошибка при выполнении поиска.");
     }
   } else if (action === "next_save") {
-    await bot.editMessageText("слуд", {
-      chat_id: chatId,
-      message_id: messageId,
-    });
+    try {
+      await bot.editMessageText(
+        `${adsIndex + 1}/${result.length} ${result[adsIndex].car_url}`,
+        {
+          chat_id: chatId,
+          message_id: messageId,
+        }
+      );
+      adsIndex++;
+      if (adsIndex < result.length) {
+        await savedMenu(chatId, result, adsIndex - 1);
+      } else {
+        await savedMenu(chatId, result[adsIndex - 1], adsIndex - 1);
+        adsIndex = 1;
+      }
+    } catch (error) {
+      console.log(error);
+    }
   } else if (action === "delete_save") {
-    await bot.editMessageText("del", {
-      chat_id: chatId,
-      message_id: messageId,
-    });
-    console.log(id);
+    try {
+      adsIndex = 1;
+      await bot.deleteMessage(chatId, messageId - 1, {
+        chat_id: chatId,
+        message_id: messageId,
+      });
+      await bot.deleteMessage(chatId, messageId, {
+        chat_id: chatId,
+        message_id: messageId,
+      });
+      await sendQuery(`DELETE FROM saved_cars WHERE id=${id}`);
+      await sendMenu(chatId);
+    } catch (error) {
+      console.log(error);
+    }
   } else if (action === "restart_search") {
     // Обработка кнопки "Начать заново"
     searchParams.brand = null;
@@ -332,17 +372,21 @@ bot.on("callback_query", async (callbackQuery) => {
     });
     await sendBrandSelection(chatId);
   } else if (action === "exit") {
-    await bot.editMessageText("Главное меню:", {
-      chat_id: chatId,
-      message_id: messageId,
-    });
-    await sendMenu(chatId);
+    try {
+      await bot.editMessageText("Главное меню:", {
+        chat_id: chatId,
+        message_id: messageId,
+      });
+      await sendMenu(chatId);
+    } catch (error) {
+      console.log(error);
+    }
   } else if (action === "save") {
     try {
-      const result = await sendQuery(
+      await bot.deleteMessage(chatId, messageId);
+      result = await sendQuery(
         `INSERT INTO saved_cars (telegram_id, car_url) VALUES ('${callbackQuery.from.id}','${bulletins[currentBulletinIndex]}')`
       );
-      console.log(bulletins[currentBulletinIndex]);
       bot.sendMessage(chatId, `Сохранение выполнено!`);
     } catch (error) {
       bot.sendMessage(chatId, `${error}`);
@@ -352,10 +396,9 @@ bot.on("callback_query", async (callbackQuery) => {
     await sendCurrentBulletinWithButtons(chatId);
   } else if (action === "saved") {
     try {
-      const result = await sendQuery(
-        `SELECT car_url FROM saved_cars WHERE telegram_id = '${callbackQuery.from.id}'`
+      result = await sendQuery(
+        `SELECT car_url, id FROM saved_cars WHERE telegram_id = '${callbackQuery.from.id}'`
       );
-      console.log(result.length);
       await bot.deleteMessage(chatId, messageId);
       await bot.sendMessage(chatId, `Сохраненные объявления:`);
       if (result.length > 0) {
@@ -364,7 +407,8 @@ bot.on("callback_query", async (callbackQuery) => {
           `1/${result.length} ${result[0].car_url}}`
         );
         isReady = false;
-        await savedMenu(chatId, result);
+        if (result.length > 1) await savedMenu(chatId, result);
+        else await savedMenu(chatId, result[0]);
       } else {
         bot.sendMessage(chatId, `Пусто!`);
         isReady = true;
@@ -379,6 +423,7 @@ bot.on("callback_query", async (callbackQuery) => {
       await sendMenu(chatId);
     }
   } else if (action === "next") {
+    await bot.deleteMessage(chatId, messageId);
     currentBulletinIndex++;
     await sendCurrentBulletinWithButtons(chatId);
   }
@@ -388,6 +433,8 @@ bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const messageText = msg.text;
   const messageId = msg.message_id;
+
+  adsIndex = 1;
 
   try {
     const result = await sendQuery(
