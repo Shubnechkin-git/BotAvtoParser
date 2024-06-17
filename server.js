@@ -6,16 +6,17 @@ const express = require("express");
 const mysql = require("mysql2");
 
 let result = {};
+let requests = {};
 
 let pool;
 
 process.env.NODE_ENV === "development"
   ? (pool = mysql.createPool({
-      host: "localhost",
-      database: "bot_avtoparser",
-      user: "root",
-      password: "root",
-    }))
+    host: "localhost",
+    database: "bot_avtoparser",
+    user: "root",
+    password: "",
+  }))
   : (pool = mysql.createPool(process.env.MYSQL_ADDON_URI));
 
 const sendQuery = (query) => {
@@ -63,6 +64,7 @@ const bot = new TelegramBot(token, { polling: true });
 
 // Объект для хранения параметров поиска пользователя
 const searchParams = {
+  city: null,
   brand: null,
   model: null,
   year: null,
@@ -74,6 +76,15 @@ async function sendBrandSelection(chatId) {
     force_reply: true,
   };
   await bot.sendMessage(chatId, "Введите название марки:", {
+    reply_markup: keyboard,
+  });
+}
+
+async function sendSitySelection(chatId) {
+  const keyboard = {
+    force_reply: true,
+  };
+  await bot.sendMessage(chatId, "Введите название города(желательно на англиском):", {
     reply_markup: keyboard,
   });
 }
@@ -203,7 +214,7 @@ async function sendYearInput(chatId) {
   const keyboard = {
     force_reply: true,
   };
-  await bot.sendMessage(chatId, "Введите год выпуска:", {
+  await bot.sendMessage(chatId, "Введите минимальный год выпуска:", {
     reply_markup: keyboard,
   });
 }
@@ -217,35 +228,63 @@ async function handleRandomMessage(chatId) {
 }
 
 // Функция для отправки сообщения с выбранными параметрами и клавиатурой "Начать поиск" или "Редактировать"
-async function sendSearchParams(chatId) {
+async function sendSearchParams(chatId, k = 0) {
   let message = "Выбранные параметры поиска:\n";
+  message += `Марка: ${searchParams.city}\n`;
   message += `Марка: ${searchParams.brand}\n`;
   message += `Модель: ${searchParams.model}\n`;
-  message += `Год выпуска: ${searchParams.year}\n\n`;
+  message += `Минимальный год выпуска: ${searchParams.year}\n\n`;
   message += "Что вы хотите сделать?";
 
-  const keyboard = {
-    inline_keyboard: [
-      [
-        {
-          text: "Начать поиск",
-          callback_data: JSON.stringify({ action: "start_search" }),
-        },
+  let keyboard;
+
+  if (k == 0)
+    keyboard = {
+      inline_keyboard: [
+        [
+          {
+            text: "Начать поиск",
+            callback_data: JSON.stringify({ action: "start_search" }),
+          },
+        ],
+        [
+          {
+            text: "Заполнить заново",
+            callback_data: JSON.stringify({ action: "restart_search" }),
+          },
+        ],
+        [
+          {
+            text: "Выйти в меню",
+            callback_data: JSON.stringify({ action: "exit" }),
+          },
+        ],
+        [{ text: "Подписаться", callback_data: JSON.stringify({ action: "subs" }) }]
       ],
-      [
-        {
-          text: "Заполнить заново",
-          callback_data: JSON.stringify({ action: "restart_search" }),
-        },
+    };
+  if (k == 1)
+    keyboard = {
+      inline_keyboard: [
+        [
+          {
+            text: "Начать поиск",
+            callback_data: JSON.stringify({ action: "start_search" }),
+          },
+        ],
+        [
+          {
+            text: "Заполнить заново",
+            callback_data: JSON.stringify({ action: "restart_search" }),
+          },
+        ],
+        [
+          {
+            text: "Выйти в меню",
+            callback_data: JSON.stringify({ action: "exit" }),
+          },
+        ],
       ],
-      [
-        {
-          text: "Выйти в меню",
-          callback_data: JSON.stringify({ action: "exit" }),
-        },
-      ],
-    ],
-  };
+    };
 
   await bot.sendMessage(chatId, message, { reply_markup: keyboard });
 }
@@ -255,10 +294,41 @@ let bulletins = [];
 
 let adsIndex = {};
 
-async function searchAds(brand, model, year, chatId) {
+function translit(word) {
+  var answer = '';
+  var converter = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd',
+    'е': 'e', 'ё': 'e', 'ж': 'zh', 'з': 'z', 'и': 'i',
+    'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n',
+    'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't',
+    'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'c', 'ч': 'ch',
+    'ш': 'sh', 'щ': 'sch', 'ь': '', 'ы': 'y', 'ъ': '',
+    'э': 'e', 'ю': 'yu', 'я': 'ya',
+
+    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D',
+    'Е': 'E', 'Ё': 'E', 'Ж': 'Zh', 'З': 'Z', 'И': 'I',
+    'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N',
+    'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T',
+    'У': 'U', 'Ф': 'F', 'Х': 'H', 'Ц': 'C', 'Ч': 'Ch',
+    'Ш': 'Sh', 'Щ': 'Sch', 'Ь': '', 'Ы': 'Y', 'Ъ': '',
+    'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
+  };
+
+  for (var i = 0; i < word.length; ++i) {
+    if (converter[word[i]] == undefined) {
+      answer += word[i];
+    } else {
+      answer += converter[word[i]];
+    }
+  }
+
+  return answer;
+}
+
+async function searchAds(city, brand, model, year, chatId) {
   try {
     const response = await axios.get(
-      `https://auto.drom.ru/${brand}/${model}/?minyear=${year}`
+      `https://${city}.drom.ru/${brand}/${model}/?minyear=${year}`
     );
     const $ = cheerio.load(response.data);
     const bulletinElements = $('[data-ftid="bulls-list_bull"]');
@@ -344,17 +414,30 @@ bot.on("callback_query", async (callbackQuery) => {
       bot.deleteMessage(chatId, messageId);
       status = true;
       await subscriptions(chatId, status);
-      userCronJobs[chatId] = cron.schedule("*/5 * * * * *", () => {
+      userCronJobs[chatId] = cron.schedule("*/15 * * * * *", () => {
         sendNotification(chatId);
       });
       bot.sendMessage(
         chatId,
-        "Уведомления включены. Вы будете получать уведомления каждые 5 секунд."
+        "Уведомления включены. Вы будете получать уведомления каждые 15 секунд."
       );
     } catch (error) {
       bot.sendMessage(chatId, error.message);
     }
-  } else if (action === "disable") {
+  } else if (action === "subs") {
+    // Проверяем, существует ли chatId в объекте requests
+    if (!requests.hasOwnProperty(chatId)) {
+      // Если не существует, то создаем ключ chatId и присваиваем ему начальное значение - пустой массив
+      requests[chatId] = [];
+    }
+
+    requests[chatId].push(`Город: ${searchParams.city}, машина: ${searchParams.brand} ${searchParams.model} ${searchParams.year}`);
+
+    await bot.deleteMessage(chatId, messageId);
+    await bot.sendMessage(chatId, "Вы успешно подписались!");
+    await sendSearchParams(chatId, 1);
+  }
+  else if (action === "disable") {
     try {
       bot.deleteMessage(chatId, messageId);
       status = false;
@@ -368,6 +451,7 @@ bot.on("callback_query", async (callbackQuery) => {
   } else if (action === "start_search") {
     try {
       const ads = await searchAds(
+        searchParams.city,
         searchParams.brand,
         searchParams.model,
         searchParams.year,
@@ -380,6 +464,7 @@ bot.on("callback_query", async (callbackQuery) => {
       if (ads.length == 0) {
         await bot.sendMessage(chatId, "По вашему запросу ничего не найдено.");
         // Начать заполнение сначала
+        searchParams.city = null;
         searchParams.brand = null;
         searchParams.model = null;
         searchParams.year = null;
@@ -394,8 +479,7 @@ bot.on("callback_query", async (callbackQuery) => {
   } else if (action === "next_save") {
     try {
       await bot.editMessageText(
-        `${adsIndex[chatId].index + 1}/${result[chatId].length} ${
-          result[chatId][adsIndex[chatId].index].car_url
+        `${adsIndex[chatId].index + 1}/${result[chatId].length} ${result[chatId][adsIndex[chatId].index].car_url
         }`,
         {
           chat_id: chatId,
@@ -443,7 +527,7 @@ bot.on("callback_query", async (callbackQuery) => {
       chat_id: chatId,
       message_id: messageId,
     });
-    await sendBrandSelection(chatId);
+    await sendSitySelection(chatId);
   } else if (action === "exit") {
     try {
       await bot.editMessageText("Главное меню:", {
@@ -514,8 +598,25 @@ bot.on("callback_query", async (callbackQuery) => {
 const cron = require("node-cron");
 
 function sendNotification(chatId) {
-  bot.sendMessage(chatId, `Это ваше уведомление ${chatId}`);
+  // Проверяем, существует ли chatId в объекте requests
+  if (requests.hasOwnProperty(chatId) && requests[chatId].length > 0) {
+    // Создаем пустую строку для хранения сообщения
+    let message = '';
+
+    // Перебираем массив записей для chatId
+    for (let request of requests[chatId]) {
+      // Добавляем информацию о городе и машине в сообщение
+      message += `${request}\n`;
+    }
+
+    // Отправляем сообщение пользователю
+    bot.sendMessage(chatId, `Это ваши уведомления:\n${message}`);
+  } else {
+    // Если записей нет, то отправляем сообщение об этом
+    bot.sendMessage(chatId, 'У вас нет уведомлений');
+  }
 }
+
 
 // Обработчик события на ответ от пользователя
 bot.on("message", async (msg) => {
@@ -535,13 +636,23 @@ bot.on("message", async (msg) => {
 
   if (messageText === "/start") {
     // await bot.deleteMessage(chatId, messageId);
-    await sendBrandSelection(chatId, 1);
+    await sendSitySelection(chatId)
+  } else if (msg.reply_to_message &&
+    msg.reply_to_message.text === "Введите название города(желательно на англиском):") {
+    try {
+      searchParams.city = translit(messageText.toLowerCase());
+      await bot.sendMessage(chatId, `Выбран город: ${searchParams.city}`);
+      await sendBrandSelection(chatId, 1);
+    } catch {
+      bot.sendMessage(chatId, "Город может содержать только буквы");
+      await sendSitySelection(chatId);
+    }
   } else if (
     msg.reply_to_message &&
     msg.reply_to_message.text === "Введите название марки:"
   ) {
     try {
-      searchParams.brand = messageText.toLowerCase();
+      searchParams.brand = translit(messageText.toLowerCase());
       if (searchParams.brand == null) {
         await sendBrandSelection(chatId);
         return;
@@ -557,7 +668,7 @@ bot.on("message", async (msg) => {
     msg.reply_to_message.text === "Введите название модели:"
   ) {
     try {
-      searchParams.model = messageText.toLowerCase();
+      searchParams.model = translit(messageText.toLowerCase());
       if (searchParams.model == null) {
         await sendModelSelection(chatId);
         return;
@@ -570,7 +681,7 @@ bot.on("message", async (msg) => {
     }
   } else if (
     msg.reply_to_message &&
-    msg.reply_to_message.text === "Введите год выпуска:"
+    msg.reply_to_message.text === "Введите минимальный год выпуска:"
   ) {
     // Обработка ввода года
     try {
@@ -581,7 +692,7 @@ bot.on("message", async (msg) => {
         await sendYearInput(chatId);
         return;
       }
-      await bot.sendMessage(chatId, `Выбран год: ${searchParams.year}`);
+      await bot.sendMessage(chatId, `Выбран минимальный год выпуска: ${searchParams.year}`);
       // Отправляем сообщение с выбранными параметрами и клавиатурой "Начать поиск" или "Редактировать"
       await sendSearchParams(chatId);
     } catch (error) {

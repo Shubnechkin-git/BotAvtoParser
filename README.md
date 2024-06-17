@@ -27,7 +27,8 @@
 git clone https://github.com/Shubnechkin-git/BotAvtoParser
 cd ./BotAvtoParser
 npm i
-node ./server.js
+npm i -g cross-env nodemon
+npm run start:dev
 ```
 
 ### Setting project <a name = "serring-project"></a>
